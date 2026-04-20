@@ -96,6 +96,18 @@ int libfsrefs_internal_file_entry_get_directory_object(
      libcerror_error_t **error );
 
 LIBFSREFS_EXTERN \
+int libfsrefs_file_entry_get_object_identifier(
+     libfsrefs_file_entry_t *file_entry,
+     uint64_t *object_identifier,
+     libcerror_error_t **error );
+
+LIBFSREFS_EXTERN \
+int libfsrefs_file_entry_get_type(
+     libfsrefs_file_entry_t *file_entry,
+     uint16_t *entry_type,
+     libcerror_error_t **error );
+
+LIBFSREFS_EXTERN \
 int libfsrefs_file_entry_get_creation_time(
      libfsrefs_file_entry_t *file_entry,
      uint64_t *filetime,

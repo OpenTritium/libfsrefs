@@ -83,6 +83,7 @@ int libfsrefs_file_system_read_container_trees(
 int libfsrefs_file_system_get_block_offsets(
      libfsrefs_file_system_t *file_system,
      libfsrefs_io_handle_t *io_handle,
+     libbfio_handle_t *file_io_handle,
      libfsrefs_block_reference_t *block_reference,
      libcerror_error_t **error );
 

@@ -124,7 +124,18 @@ int info_handle_file_system_hierarchy_fprint_file_entry(
      const system_character_t *path,
      libcerror_error_t **error );
 
+int info_handle_file_system_index_fprint_file_entry(
+     info_handle_t *info_handle,
+     libfsrefs_file_entry_t *file_entry,
+     const system_character_t *path,
+     uint64_t parent_object_identifier,
+     libcerror_error_t **error );
+
 int info_handle_file_system_hierarchy_fprint(
+     info_handle_t *info_handle,
+     libcerror_error_t **error );
+
+int info_handle_file_system_index_fprint(
      info_handle_t *info_handle,
      libcerror_error_t **error );
 

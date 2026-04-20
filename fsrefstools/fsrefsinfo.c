@@ -52,6 +52,7 @@
 enum FSREFSINFO_MODES
 {
 	FSREFSINFO_MODE_FILE_ENTRY,
+	FSREFSINFO_MODE_FILE_SYSTEM_INDEX,
 	FSREFSINFO_MODE_FILE_SYSTEM_HIERARCHY,
 	FSREFSINFO_MODE_USN_CHANGE_JOURNAL,
 	FSREFSINFO_MODE_VOLUME
@@ -72,12 +73,13 @@ void usage_fprint(
 	fprintf( stream, "Use fsrefsinfo to determine information about a Resiliant\n"
 	                 " File System (ReFS).\n\n" );
 
-	fprintf( stream, "Usage: fsrefsinfo [ -o offset ] [ -hHvV ] source\n\n" );
+	fprintf( stream, "Usage: fsrefsinfo [ -o offset ] [ -hHIvV ] source\n\n" );
 
 	fprintf( stream, "\tsource: the source file or device\n\n" );
 
 	fprintf( stream, "\t-h:     shows this help\n" );
 	fprintf( stream, "\t-H:     shows the file system hierarchy\n" );
+	fprintf( stream, "\t-I:     shows the file system index\n" );
 	fprintf( stream, "\t-o:     specify the volume offset\n" );
 	fprintf( stream, "\t-v:     verbose output to stderr\n" );
 	fprintf( stream, "\t-V:     print version\n" );
@@ -177,7 +179,7 @@ int main( int argc, char * const argv[] )
 	while( ( option = fsrefstools_getopt(
 	                   argc,
 	                   argv,
-	                   _SYSTEM_STRING( "hHo:vV" ) ) ) != (system_integer_t) -1 )
+	                   _SYSTEM_STRING( "hHIo:vV" ) ) ) != (system_integer_t) -1 )
 	{
 		switch( option )
 		{
@@ -201,6 +203,11 @@ int main( int argc, char * const argv[] )
 
 			case (system_integer_t) 'H':
 				option_mode = FSREFSINFO_MODE_FILE_SYSTEM_HIERARCHY;
+
+				break;
+
+			case (system_integer_t) 'I':
+				option_mode = FSREFSINFO_MODE_FILE_SYSTEM_INDEX;
 
 				break;
 
@@ -285,6 +292,19 @@ int main( int argc, char * const argv[] )
 	}
 	switch( option_mode )
 	{
+		case FSREFSINFO_MODE_FILE_SYSTEM_INDEX:
+			if( info_handle_file_system_index_fprint(
+			     fsrefsinfo_info_handle,
+			     &error ) != 1 )
+			{
+				fprintf(
+				 stderr,
+				 "Unable to print file system index.\n" );
+
+				goto on_error;
+			}
+			break;
+
 		case FSREFSINFO_MODE_FILE_SYSTEM_HIERARCHY:
 			if( info_handle_file_system_hierarchy_fprint(
 			     fsrefsinfo_info_handle,

@@ -42,6 +42,10 @@ struct libfsrefs_directory_entry
 	 */
 	uint64_t object_identifier;
 
+	/* Parent object identifier
+	 */
+	uint64_t parent_object_identifier;
+
 	/* The (file) entry type
 	 */
 	uint16_t entry_type;
@@ -73,6 +77,10 @@ struct libfsrefs_directory_entry
 	/* The file attribute flags
 	 */
 	uint32_t file_attribute_flags;
+
+	/* The data size for file entries
+	 */
+	uint64_t data_size;
 
 	/* The attributes array
 	 */

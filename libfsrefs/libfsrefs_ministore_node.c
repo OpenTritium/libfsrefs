@@ -534,9 +534,12 @@ int libfsrefs_ministore_node_read_data(
 			 error,
 			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
 			 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
-			 "%s: invalid record: %" PRIu32 " data offset value out of bounds.",
+			 "%s: invalid record: %" PRIu32 " data offset value out of bounds: 0x%08" PRIx32 " (start: 0x%08" PRIx32 ", end: 0x%08" PRIx32 ").",
 			 function,
-			 record_offsets_index );
+			 record_offsets_index,
+			 record_data_offset,
+			 node_header->data_area_start_offset,
+			 node_header->data_area_end_offset );
 
 			goto on_error;
 		}
@@ -665,10 +668,14 @@ int libfsrefs_ministore_node_read_file_io_handle(
 {
 	libfsrefs_metadata_block_header_t *metadata_block_header = NULL;
 	static char *function                                    = "libfsrefs_ministore_node_read_file_io_handle";
+	size_t assembled_data_size                               = 0;
+	size_t block_data_offset                                 = 0;
+	size_t block_data_size                                   = 0;
 	size_t header_size                                       = 0;
 	size_t read_size                                         = 0;
 	ssize_t read_count                                       = 0;
 	uint8_t block_number_index                               = 0;
+	uint8_t *block_data                                      = NULL;
 
 	if( ministore_node == NULL )
 	{
@@ -767,36 +774,27 @@ int libfsrefs_ministore_node_read_file_io_handle(
 
 		goto on_error;
 	}
-	for( block_number_index = 0;
-	     block_number_index < 4;
-	     block_number_index++ )
+	read_count = libbfio_handle_read_buffer_at_offset(
+	              file_io_handle,
+	              ministore_node->internal_data,
+	              io_handle->metadata_block_size,
+	              block_reference->block_offsets[ 0 ],
+	              error );
+
+	if( read_count != (ssize_t) io_handle->metadata_block_size )
 	{
-		if( block_reference->block_numbers[ block_number_index ] == 0 )
-		{
-			break;
-		}
-		read_count = libbfio_handle_read_buffer_at_offset(
-		              file_io_handle,
-		              ministore_node->internal_data,
-		              io_handle->metadata_block_size,
-		              block_reference->block_offsets[ block_number_index ],
-		              error );
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_IO,
+		 LIBCERROR_IO_ERROR_READ_FAILED,
+		 "%s: unable to read ministore node block: 0 at offset: %" PRIi64 " (0x%08" PRIx64 ").",
+		 function,
+		 block_reference->block_offsets[ 0 ],
+		 block_reference->block_offsets[ 0 ] );
 
-		if( read_count != (ssize_t) io_handle->metadata_block_size )
-		{
-			libcerror_error_set(
-			 error,
-			 LIBCERROR_ERROR_DOMAIN_IO,
-			 LIBCERROR_IO_ERROR_READ_FAILED,
-			 "%s: unable to read ministore node block: %" PRIu8 " at offset: %" PRIi64 " (0x%08" PRIx64 ").",
-			 function,
-			 block_number_index,
-			 block_reference->block_offsets[ block_number_index ],
-			 block_reference->block_offsets[ block_number_index ] );
-
-			goto on_error;
-		}
+		goto on_error;
 	}
+	assembled_data_size = io_handle->metadata_block_size;
 	if( libfsrefs_metadata_block_header_initialize(
 	     &metadata_block_header,
 	     error ) != 1 )
@@ -844,6 +842,81 @@ int libfsrefs_ministore_node_read_file_io_handle(
 
 			goto on_error;
 		}
+		block_data = (uint8_t *) memory_allocate(
+		                          io_handle->metadata_block_size );
+
+		if( block_data == NULL )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_MEMORY,
+			 LIBCERROR_MEMORY_ERROR_INSUFFICIENT,
+			 "%s: unable to create block data.",
+			 function );
+
+			goto on_error;
+		}
+		block_data_size = io_handle->metadata_block_size;
+
+		for( block_number_index = 1;
+		     block_number_index < 4;
+		     block_number_index++ )
+		{
+			if( block_reference->block_numbers[ block_number_index ] == 0 )
+			{
+				break;
+			}
+			if( ( assembled_data_size + block_data_size ) > read_size )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+				 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
+				 "%s: invalid assembled metadata block data size value out of bounds.",
+				 function );
+
+				goto on_error;
+			}
+			read_count = libbfio_handle_read_buffer_at_offset(
+			              file_io_handle,
+			              block_data,
+			              io_handle->metadata_block_size,
+			              block_reference->block_offsets[ block_number_index ],
+			              error );
+
+			if( read_count != (ssize_t) io_handle->metadata_block_size )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_IO,
+				 LIBCERROR_IO_ERROR_READ_FAILED,
+				 "%s: unable to read ministore node block: %" PRIu8 " at offset: %" PRIi64 " (0x%08" PRIx64 ").",
+				 function,
+				 block_number_index,
+				 block_reference->block_offsets[ block_number_index ],
+				 block_reference->block_offsets[ block_number_index ] );
+
+				goto on_error;
+			}
+			block_data_offset = assembled_data_size;
+
+			if( memory_copy(
+			     &( ministore_node->internal_data[ block_data_offset ] ),
+			     block_data,
+			     block_data_size ) == NULL )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_MEMORY,
+				 LIBCERROR_MEMORY_ERROR_COPY_FAILED,
+				 "%s: unable to copy metadata block data: %" PRIu8 ".",
+				 function,
+				 block_number_index );
+
+				goto on_error;
+			}
+			assembled_data_size += block_data_size;
+		}
 	}
 	if( libfsrefs_metadata_block_header_free(
 	     &metadata_block_header,
@@ -862,7 +935,7 @@ int libfsrefs_ministore_node_read_file_io_handle(
 	     ministore_node,
 	     io_handle,
 	     &( ministore_node->internal_data[ header_size ] ),
-	     read_size - header_size,
+	     assembled_data_size - header_size,
 	     error ) != 1 )
 	{
 		libcerror_error_set(
@@ -874,6 +947,11 @@ int libfsrefs_ministore_node_read_file_io_handle(
 
 		goto on_error;
 	}
+	if( block_data != NULL )
+	{
+		memory_free(
+		 block_data );
+	}
 	return( 1 );
 
 on_error:
@@ -882,6 +960,11 @@ on_error:
 		libfsrefs_metadata_block_header_free(
 		 &metadata_block_header,
 		 NULL );
+	}
+	if( block_data != NULL )
+	{
+		memory_free(
+		 block_data );
 	}
 	if( ministore_node->internal_data != NULL )
 	{

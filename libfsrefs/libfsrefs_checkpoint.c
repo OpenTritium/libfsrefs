@@ -189,6 +189,7 @@ int libfsrefs_checkpoint_read_data(
 	size_t header_size                           = 0;
 	size_t trailer_size                          = 0;
 	uint32_t block_reference_offset              = 0;
+	uint32_t offsets_data_size                   = 0;
 	uint32_t number_of_offsets                   = 0;
 	uint32_t offset_index                        = 0;
 	uint32_t offsets_data_offset                 = 0;
@@ -499,8 +500,59 @@ int libfsrefs_checkpoint_read_data(
 #endif /* defined( HAVE_DEBUG_OUTPUT ) */
 
 	data_offset += trailer_size;
+	if( io_handle->major_format_version == 3 )
+	{
+		if( ( data_size - data_offset ) < 8 )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+			 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
+			 "%s: invalid offsets data descriptor size value out of bounds.",
+			 function );
 
-	if( ( ( data_size - data_offset ) / 4 ) < number_of_offsets )
+			goto on_error;
+		}
+		byte_stream_copy_to_uint32_little_endian(
+		 &( data[ data_offset ] ),
+		 offsets_data_offset );
+
+		byte_stream_copy_to_uint32_little_endian(
+		 &( data[ data_offset + 4 ] ),
+		 offsets_data_size );
+
+		if( ( offsets_data_offset < header_size )
+		 || ( offsets_data_offset >= ( data_size + header_size ) ) )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+			 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
+			 "%s: invalid offsets data offset value out of bounds.",
+			 function );
+
+			goto on_error;
+		}
+		offsets_data_offset -= header_size;
+
+		if( offsets_data_size < ( number_of_offsets * 4 ) )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+			 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
+			 "%s: invalid offsets data size value out of bounds.",
+			 function );
+
+			goto on_error;
+		}
+	}
+	else
+	{
+		offsets_data_offset = data_offset;
+	}
+
+	if( ( ( data_size - offsets_data_offset ) / 4 ) < number_of_offsets )
 	{
 		libcerror_error_set(
 		 error,
@@ -511,7 +563,6 @@ int libfsrefs_checkpoint_read_data(
 
 		goto on_error;
 	}
-	offsets_data_offset = data_offset;
 
 #if defined( HAVE_DEBUG_OUTPUT )
 	if( libcnotify_verbose != 0 )
@@ -520,12 +571,15 @@ int libfsrefs_checkpoint_read_data(
 		 "%s: offsets data:\n",
 		 function );
 		libcnotify_print_data(
-		 &( data[ data_offset ] ),
+		 &( data[ offsets_data_offset ] ),
 		 number_of_offsets * 4,
 		 0 );
 	}
 #endif
-	data_offset += number_of_offsets * 4;
+	if( io_handle->major_format_version == 1 )
+	{
+		data_offset += number_of_offsets * 4;
+	}
 
 #if defined( HAVE_DEBUG_OUTPUT )
 	if( libcnotify_verbose != 0 )
@@ -632,7 +686,7 @@ int libfsrefs_checkpoint_read_data(
 			 block_reference_offset );
 		}
 #endif
-		if( ( block_reference_offset < ( data_offset + header_size ) )
+		if( ( block_reference_offset < header_size )
 		 || ( block_reference_offset >= ( data_size + header_size ) ) )
 		{
 			libcerror_error_set(
@@ -670,8 +724,10 @@ int libfsrefs_checkpoint_read_data(
 			 error,
 			 LIBCERROR_ERROR_DOMAIN_IO,
 			 LIBCERROR_IO_ERROR_READ_FAILED,
-			 "%s: unable to read block reference.",
-			 function );
+			 "%s: unable to read block reference: %" PRIu32 " at offset: 0x%08" PRIx32 ".",
+			 function,
+			 offset_index,
+			 block_reference_offset + header_size );
 
 			goto on_error;
 		}

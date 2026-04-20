@@ -189,6 +189,7 @@ int libfsrefs_directory_entry_read_directory_values(
      libcerror_error_t **error )
 {
 	static char *function = "libfsrefs_directory_entry_read_directory_values";
+	uint8_t is_version3_layout = 0;
 
 #if defined( HAVE_DEBUG_OUTPUT )
 	uint64_t value_64bit  = 0;
@@ -217,14 +218,26 @@ int libfsrefs_directory_entry_read_directory_values(
 
 		return( -1 );
 	}
-	if( data_size != sizeof( fsrefs_directory_values_t ) )
+	if( data_size == sizeof( fsrefs_directory_values_t ) )
+	{
+		/* Use the original layout. */
+	}
+	else if( data_size >= 84 )
+	{
+		/* ReFS v3 directory values observed on live media place the
+		 * object identifier after an 8-byte prefix and have a larger tail.
+		 */
+		is_version3_layout = 1;
+	}
+	else
 	{
 		libcerror_error_set(
 		 error,
 		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
 		 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
-		 "%s: invalid data size value out of bounds.",
-		 function );
+		 "%s: invalid data size value out of bounds: %" PRIu64 ".",
+		 function,
+		 (uint64_t) data_size );
 
 		return( -1 );
 	}
@@ -240,29 +253,58 @@ int libfsrefs_directory_entry_read_directory_values(
 		 LIBCNOTIFY_PRINT_DATA_FLAG_GROUP_DATA );
 	}
 #endif
-	byte_stream_copy_to_uint64_little_endian(
-	 ( (fsrefs_directory_values_t *) data )->object_identifier,
-	 directory_entry->object_identifier );
+	if( is_version3_layout == 0 )
+	{
+		byte_stream_copy_to_uint64_little_endian(
+		 ( (fsrefs_directory_values_t *) data )->object_identifier,
+		 directory_entry->object_identifier );
 
-	byte_stream_copy_to_uint64_little_endian(
-	 ( (fsrefs_directory_values_t *) data )->creation_time,
-	 directory_entry->creation_time );
+		byte_stream_copy_to_uint64_little_endian(
+		 ( (fsrefs_directory_values_t *) data )->creation_time,
+		 directory_entry->creation_time );
 
-	byte_stream_copy_to_uint64_little_endian(
-	 ( (fsrefs_directory_values_t *) data )->modification_time,
-	 directory_entry->modification_time );
+		byte_stream_copy_to_uint64_little_endian(
+		 ( (fsrefs_directory_values_t *) data )->modification_time,
+		 directory_entry->modification_time );
 
-	byte_stream_copy_to_uint64_little_endian(
-	 ( (fsrefs_directory_values_t *) data )->entry_modification_time,
-	 directory_entry->entry_modification_time );
+		byte_stream_copy_to_uint64_little_endian(
+		 ( (fsrefs_directory_values_t *) data )->entry_modification_time,
+		 directory_entry->entry_modification_time );
 
-	byte_stream_copy_to_uint64_little_endian(
-	 ( (fsrefs_directory_values_t *) data )->access_time,
-	 directory_entry->access_time );
+		byte_stream_copy_to_uint64_little_endian(
+		 ( (fsrefs_directory_values_t *) data )->access_time,
+		 directory_entry->access_time );
 
-	byte_stream_copy_to_uint32_little_endian(
-	 ( (fsrefs_directory_values_t *) data )->file_attribute_flags,
-	 directory_entry->file_attribute_flags );
+		byte_stream_copy_to_uint32_little_endian(
+		 ( (fsrefs_directory_values_t *) data )->file_attribute_flags,
+		 directory_entry->file_attribute_flags );
+	}
+	else
+	{
+		byte_stream_copy_to_uint64_little_endian(
+		 &( data[ 8 ] ),
+		 directory_entry->object_identifier );
+
+		byte_stream_copy_to_uint64_little_endian(
+		 &( data[ 16 ] ),
+		 directory_entry->creation_time );
+
+		byte_stream_copy_to_uint64_little_endian(
+		 &( data[ 24 ] ),
+		 directory_entry->modification_time );
+
+		byte_stream_copy_to_uint64_little_endian(
+		 &( data[ 32 ] ),
+		 directory_entry->entry_modification_time );
+
+		byte_stream_copy_to_uint64_little_endian(
+		 &( data[ 40 ] ),
+		 directory_entry->access_time );
+
+		byte_stream_copy_to_uint32_little_endian(
+		 &( data[ 64 ] ),
+		 directory_entry->file_attribute_flags );
+	}
 
 #if defined( HAVE_DEBUG_OUTPUT )
 	if( libcnotify_verbose != 0 )
@@ -497,9 +539,34 @@ int libfsrefs_directory_entry_read_file_values(
 	 ( (fsrefs_file_values_t *) node->header_data )->access_time,
 	 directory_entry->access_time );
 
-	byte_stream_copy_to_uint32_little_endian(
-	 ( (fsrefs_file_values_t *) node->header_data )->file_attribute_flags,
-	 directory_entry->file_attribute_flags );
+	if( io_handle->major_format_version == 3 )
+	{
+		byte_stream_copy_to_uint32_little_endian(
+		 &( node->header_data[ 32 ] ),
+		 directory_entry->file_attribute_flags );
+
+		byte_stream_copy_to_uint64_little_endian(
+		 &( node->header_data[ 40 ] ),
+		 directory_entry->object_identifier );
+
+		byte_stream_copy_to_uint64_little_endian(
+		 &( node->header_data[ 48 ] ),
+		 directory_entry->data_size );
+	}
+	else
+	{
+		byte_stream_copy_to_uint32_little_endian(
+		 ( (fsrefs_file_values_t *) node->header_data )->file_attribute_flags,
+		 directory_entry->file_attribute_flags );
+
+		byte_stream_copy_to_uint64_little_endian(
+		 ( (fsrefs_file_values_t *) node->header_data )->identifier_lower,
+		 directory_entry->object_identifier );
+
+		byte_stream_copy_to_uint64_little_endian(
+		 ( (fsrefs_file_values_t *) node->header_data )->data_size,
+		 directory_entry->data_size );
+	}
 
 #if defined( HAVE_DEBUG_OUTPUT )
 	if( libcnotify_verbose != 0 )
@@ -735,15 +802,18 @@ int libfsrefs_directory_entry_read_file_values(
 		     node_record,
 		     error ) != 1 )
 		{
-			libcerror_error_set(
-			 error,
-			 LIBCERROR_ERROR_DOMAIN_IO,
-			 LIBCERROR_IO_ERROR_READ_FAILED,
-			 "%s: unable to read attribute values from record: %d.",
-			 function,
-			 record_index );
+			libfsrefs_attribute_values_free(
+			 &attribute_values,
+			 NULL );
 
-			goto on_error;
+			attribute_values = NULL;
+
+			if( error != NULL )
+			{
+				libcerror_error_free(
+				 error );
+			}
+			continue;
 		}
 		if( libcdata_array_append_entry(
 		     directory_entry->attributes_array,

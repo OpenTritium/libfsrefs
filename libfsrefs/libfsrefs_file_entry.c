@@ -218,6 +218,52 @@ int libfsrefs_file_entry_free(
 	return( result );
 }
 
+/* Retrieves the size of the default data stream (nameless $DATA attribute)
+ * Returns 1 if successful or -1 on error
+ */
+int libfsrefs_file_entry_get_size(
+     libfsrefs_file_entry_t *file_entry,
+     size64_t *size,
+     libcerror_error_t **error )
+{
+	libfsrefs_internal_file_entry_t *internal_file_entry = NULL;
+	static char *function                                = "libfsrefs_file_entry_get_size";
+
+	if( file_entry == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid file entry.",
+		 function );
+
+		return( -1 );
+	}
+	if( size == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid size.",
+		 function );
+
+		return( -1 );
+	}
+	internal_file_entry = (libfsrefs_internal_file_entry_t *) file_entry;
+
+	if( internal_file_entry->directory_entry == NULL )
+	{
+		*size = 0;
+
+		return( 1 );
+	}
+	*size = internal_file_entry->directory_entry->data_size;
+
+	return( 1 );
+}
+
 /* Retrieves the directory object
  * Returns 1 if successful or -1 on error
  */
@@ -326,6 +372,114 @@ on_error:
 /* Retrieves the creation date and time
  * Returns 1 if successful, 0 if not available or -1 on error
  */
+int libfsrefs_file_entry_get_object_identifier(
+     libfsrefs_file_entry_t *file_entry,
+     uint64_t *object_identifier,
+     libcerror_error_t **error )
+{
+	libfsrefs_internal_file_entry_t *internal_file_entry = NULL;
+	static char *function                                = "libfsrefs_file_entry_get_object_identifier";
+	int result                                           = 0;
+
+	if( file_entry == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid file entry.",
+		 function );
+
+		return( -1 );
+	}
+	if( object_identifier == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid object identifier.",
+		 function );
+
+		return( -1 );
+	}
+	internal_file_entry = (libfsrefs_internal_file_entry_t *) file_entry;
+
+	if( internal_file_entry->directory_entry == NULL )
+	{
+		*object_identifier = 0x00000600UL;
+
+		return( 1 );
+	}
+	result = libfsrefs_directory_entry_get_object_identifier(
+	          internal_file_entry->directory_entry,
+	          object_identifier,
+	          error );
+
+	if( result != 1 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to retrieve object identifier from directory entry.",
+		 function );
+
+		return( -1 );
+	}
+	if( ( internal_file_entry->directory_entry->entry_type == 1 )
+	 && ( internal_file_entry->directory_entry->parent_object_identifier != 0 )
+	 && ( *object_identifier <= 0x00000000ffffffffULL ) )
+	{
+		*object_identifier = ( internal_file_entry->directory_entry->parent_object_identifier << 32 )
+		                   | ( *object_identifier & 0x00000000ffffffffULL );
+	}
+	return( 1 );
+}
+
+int libfsrefs_file_entry_get_type(
+     libfsrefs_file_entry_t *file_entry,
+     uint16_t *entry_type,
+     libcerror_error_t **error )
+{
+	libfsrefs_internal_file_entry_t *internal_file_entry = NULL;
+	static char *function                                = "libfsrefs_file_entry_get_type";
+
+	if( file_entry == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid file entry.",
+		 function );
+
+		return( -1 );
+	}
+	if( entry_type == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid entry type.",
+		 function );
+
+		return( -1 );
+	}
+	internal_file_entry = (libfsrefs_internal_file_entry_t *) file_entry;
+
+	if( internal_file_entry->directory_entry == NULL )
+	{
+		*entry_type = 2;
+
+		return( 1 );
+	}
+	*entry_type = internal_file_entry->directory_entry->entry_type;
+
+	return( 1 );
+}
+
 int libfsrefs_file_entry_get_creation_time(
      libfsrefs_file_entry_t *file_entry,
      uint64_t *filetime,

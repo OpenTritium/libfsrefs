@@ -273,6 +273,7 @@ int libfsrefs_objects_tree_get_ministore_tree_by_identifier(
 	libfsrefs_ministore_node_t *safe_root_node   = NULL;
 	libfsrefs_node_record_t *node_record         = NULL;
 	static char *function                        = "libfsrefs_objects_tree_get_ministore_tree_by_identifier";
+	size_t block_reference_offset                = 0;
 	int result                                   = 0;
 
 	if( objects_tree == NULL )
@@ -357,11 +358,27 @@ int libfsrefs_objects_tree_get_ministore_tree_by_identifier(
 
 			goto on_error;
 		}
+		if( io_handle->major_format_version == 3 )
+		{
+			block_reference_offset = 32;
+
+			if( node_record->value_data_size < block_reference_offset )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+				 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
+				 "%s: invalid object record value data size value out of bounds.",
+				 function );
+
+				goto on_error;
+			}
+		}
 		if( libfsrefs_block_reference_read_data(
 		     block_reference,
 		     io_handle,
-		     node_record->value_data,
-		     node_record->value_data_size,
+		     &( node_record->value_data[ block_reference_offset ] ),
+		     node_record->value_data_size - block_reference_offset,
 		     error ) != 1 )
 		{
 			libcerror_error_set(
@@ -376,6 +393,7 @@ int libfsrefs_objects_tree_get_ministore_tree_by_identifier(
 		if( libfsrefs_file_system_get_block_offsets(
 		     objects_tree->file_system,
 		     io_handle,
+		     file_io_handle,
 		     block_reference,
 		     error ) != 1 )
 		{
@@ -413,9 +431,11 @@ int libfsrefs_objects_tree_get_ministore_tree_by_identifier(
 			 error,
 			 LIBCERROR_ERROR_DOMAIN_IO,
 			 LIBCERROR_IO_ERROR_READ_FAILED,
-			 "%s: unable to read object: 0x%08" PRIx64 " ministore tree root node.",
+			 "%s: unable to read object: 0x%08" PRIx64 " ministore tree root node at offset: %" PRIi64 " (0x%08" PRIx64 ").",
 			 function,
-			 object_identifier );
+			 object_identifier,
+			 block_reference->block_offsets[ 0 ],
+			 block_reference->block_offsets[ 0 ] );
 
 			goto on_error;
 		}

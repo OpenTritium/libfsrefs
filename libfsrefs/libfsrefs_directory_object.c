@@ -36,6 +36,15 @@
 #include "libfsrefs_node_record.h"
 #include "libfsrefs_objects_tree.h"
 
+typedef struct libfsrefs_directory_name_record libfsrefs_directory_name_record_t;
+
+struct libfsrefs_directory_name_record
+{
+	uint64_t object_identifier;
+	uint8_t *name_data;
+	size_t name_data_size;
+};
+
 /* Creates a directory object
  * Make sure the value directory_object is referencing, is set to NULL
  * Returns 1 if successful or -1 on error
@@ -448,11 +457,16 @@ int libfsrefs_directory_object_read_node(
 {
 	libfsrefs_block_reference_t *block_reference = NULL;
 	libfsrefs_directory_entry_t *directory_entry = NULL;
+	libfsrefs_directory_name_record_t *name_records = NULL;
 	libfsrefs_ministore_node_t *sub_node         = NULL;
 	libfsrefs_node_record_t *node_record         = NULL;
 	static char *function                        = "libfsrefs_directory_object_read_node";
+	size_t name_data_size                        = 0;
 	uint16_t record_type                         = 0;
+	uint16_t value_16bit                         = 0;
+	uint64_t value_64bit                         = 0;
 	int entry_index                              = 0;
+	int name_record_index                        = 0;
 	int number_of_records                        = 0;
 	int record_index                             = 0;
 
@@ -480,6 +494,40 @@ int libfsrefs_directory_object_read_node(
 		 function );
 
 		return( -1 );
+	}
+	if( ( node->node_type_flags & 0x01 ) == 0 )
+	{
+		name_records = (libfsrefs_directory_name_record_t *) memory_allocate(
+		                sizeof( libfsrefs_directory_name_record_t ) * number_of_records );
+
+		if( name_records == NULL )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_MEMORY,
+			 LIBCERROR_MEMORY_ERROR_INSUFFICIENT,
+			 "%s: unable to create name records.",
+			 function );
+
+			return( -1 );
+		}
+		if( memory_set(
+		     name_records,
+		     0,
+		     sizeof( libfsrefs_directory_name_record_t ) * number_of_records ) == NULL )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_MEMORY,
+			 LIBCERROR_MEMORY_ERROR_SET_FAILED,
+			 "%s: unable to clear name records.",
+			 function );
+
+			memory_free(
+			 name_records );
+
+			return( -1 );
+		}
 	}
 	for( record_index = 0;
 	     record_index < number_of_records;
@@ -530,11 +578,65 @@ int libfsrefs_directory_object_read_node(
 			byte_stream_copy_to_uint16_little_endian(
 			 node_record->key_data,
 			 record_type );
-
-			if( record_type != 0x0030 )
+		}
+		if( ( node->node_type_flags & 0x01 ) == 0 )
+		{
+			if( record_type == 0x0020 )
 			{
+				if( ( node_record->key_data_size >= 24 )
+				 && ( node_record->value_data_size >= 12 ) )
+				{
+					byte_stream_copy_to_uint64_little_endian(
+					 &( node_record->key_data[ 8 ] ),
+					 value_64bit );
+
+					byte_stream_copy_to_uint16_little_endian(
+					 &( node_record->value_data[ 10 ] ),
+					 value_16bit );
+
+					name_data_size = (size_t) value_16bit;
+
+					if( ( name_data_size == 0 )
+					 || ( ( 12 + name_data_size ) > node_record->value_data_size ) )
+					{
+						if( node_record->value_data_size > 12 )
+						{
+							name_data_size = node_record->value_data_size - 12;
+						}
+					}
+					if( name_data_size > 0 )
+					{
+						name_records[ name_record_index ].name_data = (uint8_t *) memory_allocate(
+						                                               sizeof( uint8_t ) * name_data_size );
+
+						if( name_records[ name_record_index ].name_data != NULL )
+						{
+							if( memory_copy(
+							     name_records[ name_record_index ].name_data,
+							     &( node_record->value_data[ 12 ] ),
+							     name_data_size ) != NULL )
+							{
+								name_records[ name_record_index ].object_identifier = value_64bit;
+								name_records[ name_record_index ].name_data_size    = name_data_size;
+								name_record_index++;
+							}
+							else
+							{
+								memory_free(
+								 name_records[ name_record_index ].name_data );
+
+								name_records[ name_record_index ].name_data = NULL;
+							}
+						}
+					}
+				}
 				continue;
 			}
+		}
+		if( ( ( node->node_type_flags & 0x01 ) == 0 )
+		 && ( record_type != 0x0030 ) )
+		{
+			continue;
 		}
 #if defined( HAVE_DEBUG_OUTPUT )
 		if( libcnotify_verbose != 0 )
@@ -570,16 +672,46 @@ int libfsrefs_directory_object_read_node(
 			     node_record,
 			     error ) != 1 )
 			{
-				libcerror_error_set(
-				 error,
-				 LIBCERROR_ERROR_DOMAIN_IO,
-				 LIBCERROR_IO_ERROR_READ_FAILED,
-				 "%s: unable to read directory entry from record: %d.",
-				 function,
-				 record_index );
+				libfsrefs_directory_entry_free(
+				 &directory_entry,
+				 NULL );
 
-				goto on_error;
+				directory_entry = NULL;
+
+				if( error != NULL )
+				{
+					libcerror_error_free(
+					 error );
+				}
+				continue;
 			}
+			directory_entry->parent_object_identifier = directory_object->object_identifier;
+			for( entry_index = 0;
+			     entry_index < name_record_index;
+			     entry_index++ )
+			{
+				if( ( name_records[ entry_index ].name_data != NULL )
+				 && ( name_records[ entry_index ].name_data_size == directory_entry->name_data_size )
+				 && ( memory_compare(
+				      name_records[ entry_index ].name_data,
+				      directory_entry->name_data,
+				      directory_entry->name_data_size ) == 0 ) )
+				{
+					directory_entry->object_identifier        = name_records[ entry_index ].object_identifier;
+					directory_entry->parent_object_identifier = directory_object->object_identifier;
+
+					break;
+				}
+			}
+#if defined( HAVE_DEBUG_OUTPUT )
+			if( libcnotify_verbose != 0 )
+			{
+				libcnotify_printf(
+				 "%s: directory entry object identifier: 0x%08" PRIx64 "\n",
+				 function,
+				 directory_entry->object_identifier );
+			}
+#endif
 			if( libcdata_array_append_entry(
 			     directory_object->directory_entries_array,
 			     &entry_index,
@@ -635,6 +767,7 @@ int libfsrefs_directory_object_read_node(
 			if( libfsrefs_file_system_get_block_offsets(
 			     directory_object->objects_tree->file_system,
 			     io_handle,
+			     file_io_handle,
 			     block_reference,
 			     error ) != 1 )
 			{
@@ -749,9 +882,39 @@ int libfsrefs_directory_object_read_node(
 			}
 		}
 	}
+	if( name_records != NULL )
+	{
+		for( entry_index = 0;
+		     entry_index < number_of_records;
+		     entry_index++ )
+		{
+			if( name_records[ entry_index ].name_data != NULL )
+			{
+				memory_free(
+				 name_records[ entry_index ].name_data );
+			}
+		}
+		memory_free(
+		 name_records );
+	}
 	return( 1 );
 
 on_error:
+	if( name_records != NULL )
+	{
+		for( entry_index = 0;
+		     entry_index < number_of_records;
+		     entry_index++ )
+		{
+			if( name_records[ entry_index ].name_data != NULL )
+			{
+				memory_free(
+				 name_records[ entry_index ].name_data );
+			}
+		}
+		memory_free(
+		 name_records );
+	}
 	if( sub_node != NULL )
 	{
 		libfsrefs_ministore_node_free(
